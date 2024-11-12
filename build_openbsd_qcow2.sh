@@ -35,7 +35,7 @@ OPENBSD_VERSION="7.8"
 OPENBSD_ARCH=amd64
 
 OPENBSD_TRUSTED_MIRROR_BASE="https://ftp.openbsd.org/pub/OpenBSD"
-OPENBSD_MIRROR_BASE="https://cdn.openbsd.org/pub/OpenBSD"
+OPENBSD_MIRROR_BASE="https://ftp.bit.nl/pub/OpenBSD"
 OPENBSD_TRUSTED_MIRROR=""
 OPENBSD_MIRROR=""
 
@@ -51,7 +51,8 @@ INSTALLCONF="custom/install.conf"
 SSH_KEY_VAL=none
 HTTP_SERVER=10.0.2.2
 HOST_NAME="openbsd"
-ALLOW_ROOT_SSH="yes"
+ALLOW_ROOT_SSH="prohibit-password"
+TIMEZONE=UTC
 
 ### Functions
 
@@ -77,9 +78,11 @@ function check_program {
 function check_for_programs {
     check_program sudo
     if grep -E 'Debian|Ubuntu' /etc/os-release > /dev/null 2>&1; then
-        SIGNIFY_CMD=signify-openbsd
+	SIGNIFY_CMD=signify-openbsd
+	SIGNIFY_KEY="/usr/share/signify-openbsd-keys/openbsd-${v}-base.pub"
     else
-        SIGNIFY_CMD=signify
+	SIGNIFY_CMD=signify
+	SIGNIFY_KEY="/etc/signify/openbsd-${v}-base.pub"
     fi
     check_program $SIGNIFY_CMD
     check_program qemu-img
@@ -89,14 +92,20 @@ function check_for_programs {
 }
 
 function build_mirror {
-    files=("base${v}.tgz" "bsd" "bsd.mp" "bsd.rd" "comp${v}.tgz" "game${v}.tgz" "man${v}.tgz" "pxeboot" "xbase${v}.tgz" "xfont${v}.tgz" "xserv${v}.tgz" "xshare${v}.tgz" "BUILDINFO")
 
     exec_cmd curl --fail -C - -O --create-dirs --output-dir "${PATH_MIRROR}/pub/OpenBSD/${OPENBSD_VERSION}" "${OPENBSD_TRUSTED_MIRROR}/openbsd-${v}-base.pub"
+    files=("base${v}.tgz" "bsd" "bsd.mp" "bsd.rd" "comp${v}.tgz" "game${v}.tgz" "man${v}.tgz" "pxeboot" "xbase${v}.tgz" "xfont${v}.tgz" "xserv${v}.tgz" "xshare${v}.tgz" "BUILDINFO")
 
     for i in "${files[@]}" SHA256.sig; do
         exec_cmd curl --fail -C - -O --create-dirs --output-dir "${PATH_MIRROR}/pub/OpenBSD/${OPENBSD_VERSION}/${OPENBSD_ARCH}" "${OPENBSD_MIRROR}/${OPENBSD_ARCH}/$i"
     done
 
+    if [[ -n "$REUSE_PROXY" ]]; then
+        exec_cmd cp "${TOP_DIR}/custom/install.site" "${TOP_DIR}/custom/install.site.new"
+        [[ -n "$https_proxy" ]] && sed -i "/export LD_LIBRARY_PATH=/a export https_proxy=\"${https_proxy}\"" "${TOP_DIR}/custom/install.site.new"
+        [[ -n "$http_proxy" ]] && sed -i "/export LD_LIBRARY_PATH=/a export http_proxy=\"${http_proxy}\"" "${TOP_DIR}/custom/install.site.new"
+	exec_cmd mv "${TOP_DIR}/custom/install.site.new" "${TOP_DIR}/custom/install.site"
+    fi
     exec_cmd cd "${TOP_DIR}/custom"
     exec_cmd tar -czf "${PATH_MIRROR}/pub/OpenBSD/${OPENBSD_VERSION}/amd64/site${v}.tgz"  --transform 's,^create_partitions.sh,root/bin/create_partitions.sh,' install.site create_partitions.sh
 
@@ -105,16 +114,22 @@ function build_mirror {
     if ! exec_cmd $SIGNIFY_CMD -C -p "../openbsd-${v}-base.pub" -x SHA256.sig -- "${files[@]}" ; then
         fail "Signature verifications failed"
     fi
+
     exec_cmd cd "${TOP_DIR}"
     exec_cmd cp -f "${INSTALLCONF}" "${PATH_MIRROR}/install.conf"
-    exec_cmd "sed -i 's!site[0-9]*.tgz!site${v}.tgz!'                            '${PATH_MIRROR}/install.conf'"
-    exec_cmd "sed -i 's!\(disklabel = \).*\$!\1http://${HTTP_SERVER}/disklabel!' '${PATH_MIRROR}/install.conf'"
-    exec_cmd "sed -i 's!\(hostname = \).*\$!\1${HOST_NAME}!'                     '${PATH_MIRROR}/install.conf'"
-    exec_cmd "sed -i 's!\(HTTP Server = \).*\$!\1${HTTP_SERVER}!'                '${PATH_MIRROR}/install.conf'"
-    exec_cmd "sed -i 's!\(Allow root ssh login = \).*\$!\1${ALLOW_ROOT_SSH}!'    '${PATH_MIRROR}/install.conf'"
-    [ -n "$SSH_KEY" ] && SSH_KEY_VAL=$(cat "$SSH_KEY")
-    exec_cmd "echo 'Set name(s) = ${SETS}'                                    >> '${PATH_MIRROR}/install.conf'"
-    exec_cmd "echo 'Public ssh key for root account = ${SSH_KEY_VAL}'         >> '${PATH_MIRROR}/install.conf'"
+    exec_cmd sed -i "s!site[0-9]*.tgz!site${v}.tgz!"                            "${PATH_MIRROR}/install.conf"
+    exec_cmd sed -i "s!\(disklabel.=.\).*\$!\1http://${HTTP_SERVER}/disklabel!" "${PATH_MIRROR}/install.conf"
+    exec_cmd sed -i "s!\(hostname.=.\).*\$!\1${HOST_NAME}!"                     "${PATH_MIRROR}/install.conf"
+    exec_cmd sed -i "s!\(HTTP.Server.=.\).*\$!\1${HTTP_SERVER}!"                "${PATH_MIRROR}/install.conf"
+    exec_cmd sed -i "s!\(Allow.root.ssh.login.=.\).*\$!\1${ALLOW_ROOT_SSH}!"    "${PATH_MIRROR}/install.conf"
+    [[ -n "$SSH_KEY" ]] && SSH_KEY_VAL=$(cat "$SSH_KEY")
+    exec_cmd echo "Set name(s) = ${SETS}"                            | tail -n 1 | exec_cmd tee -a "${PATH_MIRROR}/install.conf"
+    exec_cmd echo "Public ssh key for root account = ${SSH_KEY_VAL}" | tail -n 1 | exec_cmd tee -a "${PATH_MIRROR}/install.conf"
+    exec_cmd echo "What timezone are you in = ${TIMEZONE}"           | tail -n 1 | exec_cmd tee -a "${PATH_MIRROR}/install.conf"
+    if [[ -n "$EFI" ]]; then
+        exec_cmd echo "Use (W)hole disk MBR, whole disk (G)PT or (E)dit = gpt" | tail -n 1 | exec_cmd tee -a "${PATH_MIRROR}/install.conf"
+        exec_cmd echo "An EFI/GPT disk may not boot. Proceed = yes"  | tail -n 1 | exec_cmd tee -a "${PATH_MIRROR}/install.conf"
+    fi
 
     exec_cmd ln -sf "../${DISKLABEL}" "${PATH_MIRROR}/disklabel"
 }
@@ -194,6 +209,9 @@ OPTIONS
   -b
     Build !
 
+  --efiboot
+    Specify that GPT labels and UEFI-capable bootloader be used.
+
   --image-file FILE_NAME
     File name of the image file, created in ./images (default: $(basename "${IMAGE_NAME}"))
 
@@ -206,23 +224,29 @@ OPTIONS
   --installconf FILE
     Path of your own install.conf file (served via http on the IP address of the next-server provided by qemu/DHCP)
 
-    -r --release OPENBSD_VERSION
-      Specify the release (default: ${OPENBSD_VERSION})
+  --reuse-proxy
+    Use the current http_proxy and/or https_proxy in the install.site script(s)
 
-    --host_name HOST_NAME
-      Hostname of the VM (default: ${HOST_NAME})
+  -r --release OPENBSD_VERSION
+    Specify the release (default: ${OPENBSD_VERSION})
 
-    --http_server IP
-      IP of the HTTP mirror hosting the sets and disklabel file (default: ${HTTP_SERVER})
+  --host_name HOST_NAME
+    Hostname of the VM (default: ${HOST_NAME})
 
-    --sshkey <PUB KEY FILE PATH>
-      Path to a SSH public key file for the root user (default: ${SSH_KEY_VAL})
+  --http_server IP
+    IP of the HTTP mirror hosting the sets and disklabel file (default: ${HTTP_SERVER})
 
-    --sets "<SET NAMES>"
-      Specify the sets to be installed (default: ${SETS})
+  --sshkey <PUB KEY FILE PATH>
+    Path to a SSH public key file for the root user (default: ${SSH_KEY_VAL})
 
-    --allow_root_ssh [yes|no]
-      Allow root ssh login (default: ${ALLOW_ROOT_SSH})
+  --sets "<SET NAMES>"
+    Specify the sets to be installed (default: ${SETS})
+
+  --timezone TIMEZONE
+    Specify the timezone of the final system (default: ${TIMEZONE})
+
+  --allow-root-ssh [yes|no|prohibit-password]
+    Allow root ssh login (default: ${ALLOW_ROOT_SSH})
 
 AUTHOR
   Hyacinthe Cartiaux <Hyacinthe.Cartiaux@gmail.com>
@@ -241,6 +265,8 @@ while [ $# -ge 1 ]; do
         -h | --help)      print_help; exit 0                  ;;
         -n | --dry-run)   DRY_RUN="DEBUG";                    ;;
         -b | --build)     RUN=1;                              ;;
+        --efiboot)        EFI=1;                              ;;
+        --reuse-proxy)    REUSE_PROXY=1;                      ;;
         --image-file)     shift; IMAGE_NAME=${PATH_IMAGES}/$1 ;;
         -s | --size)      shift; IMAGE_SIZE=$1                ;;
         --disklabel)      shift; DISKLABEL=$1                 ;;
@@ -250,6 +276,7 @@ while [ $# -ge 1 ]; do
         --host_name)      shift; HOST_NAME=$1                 ;;
         --http_server)    shift; HTTP_SERVER=$1               ;;
         --sets)           shift; SETS="$1"                    ;;
+        --timezone)       shift; TIMEZONE="$1"                ;;
         --allow_root_ssh) shift; ALLOW_ROOT_SSH="$1"          ;;
     esac
     shift
@@ -259,7 +286,8 @@ done
 [[ ! "${OPENBSD_VERSION}" =~ ^[0-9]+\.[0-9+]$                              ]] && fail "Invalid OpenBSD version"
 [[ ! "${HOST_NAME}"       =~ ^[a-z0-9-]+$                                  ]] && fail "Invalid hostname"
 [[ ! "${HTTP_SERVER}"     =~ ^[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}$ ]] && fail "${HTTP_SERVER} is not an IPv4"
-[[ ! "${ALLOW_ROOT_SSH}"  =~ ^(yes|no)+$                                   ]] && fail "Invalid parameter value for --allow-root-ssh (yes or no)"
+[[ ! "${TIMEZONE}"        =~ ^[\-a-zA-Z0-9]+/*[\-a-zA-Z0-9]*$              ]] && fail "${TIMEZONE} does not look like a valid timezone"
+[[ ! "${ALLOW_ROOT_SSH}"  =~ ^(yes|no|prohibit-password)+$                 ]] && fail "Invalid parameter value for --allow-root-ssh (yes, no or prohibit-password)"
 [[ ! -e "${DISKLABEL}"                                                     ]] && fail "Non existing disklabel file"
 [[ ! -e "${INSTALLCONF}"                                                   ]] && fail "Non existing install.conf file"
 [[ -n "${SSH_KEY}" && ! -e "${SSH_KEY}"                                    ]] && fail "Non existing SSH public key file"

@@ -101,10 +101,8 @@ function build_mirror {
     done
 
     if [[ -n "$REUSE_PROXY" ]]; then
-        exec_cmd cp "${TOP_DIR}/custom/install.site" "${TOP_DIR}/custom/install.site.new"
-        [[ -n "$https_proxy" ]] && sed -i "/export LD_LIBRARY_PATH=/a export https_proxy=\"${https_proxy}\"" "${TOP_DIR}/custom/install.site.new"
-        [[ -n "$http_proxy" ]] && sed -i "/export LD_LIBRARY_PATH=/a export http_proxy=\"${http_proxy}\"" "${TOP_DIR}/custom/install.site.new"
-	exec_cmd mv "${TOP_DIR}/custom/install.site.new" "${TOP_DIR}/custom/install.site"
+        exec_cmd sed -i "s!^\(export.http_proxy=\).*\$!\1${http_proxy:-}!"      "${TOP_DIR}/custom/install.site"
+        exec_cmd sed -i "s!^\(export.https_proxy=\).*\$!\1${https_proxy:-}!"    "${TOP_DIR}/custom/install.site"
     fi
     exec_cmd cd "${TOP_DIR}/custom"
     exec_cmd tar -czf "${PATH_MIRROR}/pub/OpenBSD/${OPENBSD_VERSION}/amd64/site${v}.tgz"  --transform 's,^create_partitions.sh,root/bin/create_partitions.sh,' install.site create_partitions.sh

@@ -3,6 +3,8 @@ set -o errexit
 
 export PATH="/usr/local/bin:${PATH}"
 export LD_LIBRARY_PATH="/usr/local/lib:${LD_LIBRARY_PATH}"
+export http_proxy=
+export https_proxy=
 
 # Setting /etc/installurl
 echo "https://cdn.openbsd.org/pub/OpenBSD" > /etc/installurl

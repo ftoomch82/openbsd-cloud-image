@@ -38,6 +38,9 @@ cd "cloud-init-${CLOUD_INIT_VERSION}"
 # Fix wrong hardcoded path, see #5789
 sed -i 's!_ROOT_TMPDIR = "/run/cloud-init/tmp"!_ROOT_TMPDIR = "/var/run/cloud-init/tmp"!' cloudinit/temp_utils.py
 
+# Why install sudo when we have a great doas?
+sed -i '/^   sudo--/d' ./tools/build-on-openbsd
+
 ###########
 # Start the install script
 ###########

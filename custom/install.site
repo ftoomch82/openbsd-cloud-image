@@ -9,6 +9,9 @@ export https_proxy=
 # Setting /etc/installurl
 echo "https://cdn.openbsd.org/pub/OpenBSD" > /etc/installurl
 
+# Disabling weak keys
+sed -i 's!ssh-keygen -A![[ -f $_ssh_pub ]] || ssh-keygen -t ed25519 -N "" -f ${_ssh_pub%%.pub}!' /etc/rc
+
 #######################
 # Cloud-init installation
 #######################

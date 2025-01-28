@@ -48,6 +48,9 @@ fi
 # Why install sudo when we have a great doas?
 sed -i '/^   sudo--/d' ./tools/build-on-openbsd
 
+# Fix wrong hardcoded path, see #5992
+sed -i 's!^    usr_lib_exec = "/usr/lib"!    usr_lib_exec = "/usr/local/lib"!' cloudinit/distros/__init__.py
+
 ###########
 # Start the install script
 ###########

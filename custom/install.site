@@ -45,6 +45,9 @@ if ! pkg_info dmidecode > /dev/null 2>&1 ; then
    sed -i '/dmidecode/d' tools/build-on-openbsd
 fi
 
+# Why install sudo when we have a great doas?
+sed -i '/^   sudo--/d' ./tools/build-on-openbsd
+
 ###########
 # Start the install script
 ###########

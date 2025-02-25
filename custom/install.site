@@ -9,6 +9,14 @@ export https_proxy="http://10.1.8.1:3128"
 # Setting /etc/installurl
 echo "https://cdn.openbsd.org/pub/OpenBSD" > /etc/installurl
 
+# Setting interactive console to com1, logging serial port to com0, qemu agent port to com2
+cat > /etc/boot.conf << 'EOF'
+stty com1 115200
+set tty com1
+boot
+EOF
+sed -i -e 's/tty00/tty-to-be-01/' -e 's/tty01/tty00/' -e 's/tty-to-be-01/tty01/' /etc/ttys
+
 # Disabling weak keys
 sed -i 's!ssh-keygen -A![[ -f $_ssh_pub ]] || ssh-keygen -t ed25519 -N "" -f ${_ssh_pub%%.pub}!' /etc/rc
 

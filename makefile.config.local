@@ -1,0 +1,8 @@
+#!/usr/bin/make -f
+
+
+mypubroot := /public/software/
+mypubdir := $(mypubroot)OpenBSD/$(myversion)/$(myarch)/
+mytrustedobsdhost := rollor
+myhttpproxy := http://10.1.8.1:3128
+myhttpsproxy := $(myhttpproxy)

@@ -75,6 +75,17 @@ echo "to match your expectations and run the script as root."            >> /etc
 
 rm /install.site
 
-# Zero out free space (reduce the image size)
-dd if=/dev/zero of=/zero.dat bs=1M || true
-rm -f /zero.dat
+#for dir in $(mount | awk '$5 == "ffs" && $3 ~ /^\/mnt/{print(gensub(/\/mnt/, "", "g", $3))}'); do
+for dir in $(awk '$3 == "ffs"{print $2}' /etc/fstab); do
+  echo "Zeroing out free space on $dir filesystem."
+  dd if=/dev/zero of="${dir}/zero.dat" bs=1M >/dev/null 2>&1 || rm -f "${dir}/zero.dat"
+done
+
+#swapctl -d /dev/sd0b # For some reason in the chroot this doesn't work, complains like so: swapctl: /dev/sd0b: Device not configured
+# So let's just check if any swap's being used and zero it out if not.
+if swapctl -s | grep -q ' 0 used'; then
+  for swap in $(swapctl -l | awk '$1 ~ /^\/dev\//{print $1}'); do
+    echo "Zeroing out free space on $swap swap partition."
+    dd if=/dev/zero of="${swap}" bs=1M >/dev/null 2>&1 || true
+  done
+fi

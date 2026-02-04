@@ -43,7 +43,7 @@ IMAGE_SIZE=20
 IMAGE_NAME="${PATH_IMAGES}/openbsd${v}_$(date +%Y-%m-%d).qcow2"
 
 QEMU_CPUS=2
-QEMU_MEM=384m
+QEMU_MEM=2048m
 
 DISKLABEL="custom/disklabel"
 INSTALLCONF="custom/install.conf"
@@ -92,17 +92,17 @@ function check_for_programs {
 }
 
 function build_mirror {
+    files=("base${v}.tgz" "bsd" "bsd.mp" "bsd.rd" "comp${v}.tgz" "game${v}.tgz" "man${v}.tgz" "pxeboot" "xbase${v}.tgz" "xfont${v}.tgz" "xserv${v}.tgz" "xshare${v}.tgz" "BUILDINFO" "BOOTX64.EFI")
 
     exec_cmd curl --fail -C - -O --create-dirs --output-dir "${PATH_MIRROR}/pub/OpenBSD/${OPENBSD_VERSION}" "${OPENBSD_TRUSTED_MIRROR}/openbsd-${v}-base.pub"
-    files=("base${v}.tgz" "bsd" "bsd.mp" "bsd.rd" "comp${v}.tgz" "game${v}.tgz" "man${v}.tgz" "pxeboot" "xbase${v}.tgz" "xfont${v}.tgz" "xserv${v}.tgz" "xshare${v}.tgz" "BUILDINFO")
 
     for i in "${files[@]}" SHA256.sig; do
         exec_cmd curl --fail -C - -O --create-dirs --output-dir "${PATH_MIRROR}/pub/OpenBSD/${OPENBSD_VERSION}/${OPENBSD_ARCH}" "${OPENBSD_MIRROR}/${OPENBSD_ARCH}/$i"
     done
 
     if [[ -n "$REUSE_PROXY" ]]; then
-        exec_cmd sed -i "s!^\(export.http_proxy=\).*\$!\1${http_proxy:-}!"      "${TOP_DIR}/custom/install.site"
-        exec_cmd sed -i "s!^\(export.https_proxy=\).*\$!\1${https_proxy:-}!"    "${TOP_DIR}/custom/install.site"
+        sed -i "s!^\(export.http_proxy=\).*\$!\1${http_proxy:-}!"      "${TOP_DIR}/custom/install.site"
+        sed -i "s!^\(export.https_proxy=\).*\$!\1${https_proxy:-}!"    "${TOP_DIR}/custom/install.site"
     fi
     exec_cmd cd "${TOP_DIR}/custom"
     exec_cmd tar -czf "${PATH_MIRROR}/pub/OpenBSD/${OPENBSD_VERSION}/amd64/site${v}.tgz"  --transform 's,^create_partitions.sh,root/bin/create_partitions.sh,' install.site create_partitions.sh
@@ -112,7 +112,6 @@ function build_mirror {
     if ! exec_cmd $SIGNIFY_CMD -C -p "../openbsd-${v}-base.pub" -x SHA256.sig -- "${files[@]}" ; then
         fail "Signature verifications failed"
     fi
-
     exec_cmd cd "${TOP_DIR}"
     exec_cmd cp -f "${INSTALLCONF}" "${PATH_MIRROR}/install.conf"
     exec_cmd sed -i "s!site[0-9]*.tgz!site${v}.tgz!"                            "${PATH_MIRROR}/install.conf"
@@ -121,11 +120,11 @@ function build_mirror {
     exec_cmd sed -i "s!\(HTTP.Server.=.\).*\$!\1${HTTP_SERVER}!"                "${PATH_MIRROR}/install.conf"
     exec_cmd sed -i "s!\(Allow.root.ssh.login.=.\).*\$!\1${ALLOW_ROOT_SSH}!"    "${PATH_MIRROR}/install.conf"
     [[ -n "$SSH_KEY" ]] && SSH_KEY_VAL=$(cat "$SSH_KEY")
-    exec_cmd echo "Set name(s) = ${SETS}"                            | tail -n 1 | exec_cmd tee -a "${PATH_MIRROR}/install.conf"
+    exec_cmd echo "Set name\(s\) = ${SETS}"                          | tail -n 1 | exec_cmd tee -a "${PATH_MIRROR}/install.conf"
     exec_cmd echo "Public ssh key for root account = ${SSH_KEY_VAL}" | tail -n 1 | exec_cmd tee -a "${PATH_MIRROR}/install.conf"
     exec_cmd echo "What timezone are you in = ${TIMEZONE}"           | tail -n 1 | exec_cmd tee -a "${PATH_MIRROR}/install.conf"
     if [[ -n "$EFI" ]]; then
-        exec_cmd echo "Use (W)hole disk MBR, whole disk (G)PT or (E)dit = gpt" | tail -n 1 | exec_cmd tee -a "${PATH_MIRROR}/install.conf"
+        exec_cmd echo "Use \(W\)hole disk MBR, whole disk \(G\)PT or \(E\)dit = gpt" | tail -n 1 | exec_cmd tee -a "${PATH_MIRROR}/install.conf"
         exec_cmd echo "An EFI/GPT disk may not boot. Proceed = yes"  | tail -n 1 | exec_cmd tee -a "${PATH_MIRROR}/install.conf"
     fi
 
@@ -148,9 +147,14 @@ function start_mirror {
 function build_tftp {
     exec_cmd cd "${TOP_DIR}"
     exec_cmd mkdir -p "${PATH_TFTP}/etc"
-    exec_cmd ln -sf "../mirror/pub/OpenBSD/${OPENBSD_VERSION}/amd64/pxeboot" tftp/auto_install
+    if [[ -n "$EFI" ]]; then
+        exec_cmd ln -sf "../mirror/pub/OpenBSD/${OPENBSD_VERSION}/amd64/BOOTX64.EFI" tftp/auto_install
+    else
+        exec_cmd ln -sf "../mirror/pub/OpenBSD/${OPENBSD_VERSION}/amd64/pxeboot" tftp/auto_install
+    fi
     exec_cmd ln -sf "../mirror/pub/OpenBSD/${OPENBSD_VERSION}/amd64/bsd.rd" tftp/bsd.rd
     exec_cmd ln -sf ../../custom/boot.conf tftp/etc/
+    exec_cmd dd if=/dev/random of=tftp/etc/random.seed bs=512 count=1
 }
 
 function create_image {
@@ -166,13 +170,24 @@ function qemu_enable_kvm {
     fi
 }
 
+function qemu_enable_efi {
+    if [[ -n "$EFI" ]]; then
+	echo -n "-machine type=pc-q35-10.0 -device virtio-rng-pci -bios /usr/share/ovmf/OVMF.fd"
+    fi
+}
+
 function launch_install {
     # Skip lines to preserve the output
     exec_cmd seq $(( $(tput lines) + 2  )) | exec_cmd tr -dc '\n'
     # Start qemu
+    # Some EFI guidance:
+    # https://www.cambus.net/booting-openbsd-kernels-in-efi-mode-with-qemu/
+    # https://codemadness.org/openbsd-autoinstall.html
+    # https://forum.proxmox.com/threads/proxmox-ve-8-4-0-unable-to-pxe-boot-under-ovmf.168220/
     if ! exec_cmd qemu-system-x86_64 "$(qemu_enable_kvm)" -nographic -action reboot=shutdown -boot once=n          \
                                 -smp cpus=$QEMU_CPUS -m $QEMU_MEM -drive file="${IMAGE_NAME}",media=disk,if=virtio \
                                 -device virtio-net-pci,netdev=n1                                                   \
+				$(qemu_enable_efi)                                                                 \
                                 -netdev user,id=n1,hostname=openbsd-vm,tftp=tftp,bootfile=auto_install; then
         fail "Qemu returned an error"
     fi
@@ -225,26 +240,26 @@ OPTIONS
   --reuse-proxy
     Use the current http_proxy and/or https_proxy in the install.site script(s)
 
-  -r --release OPENBSD_VERSION
-    Specify the release (default: ${OPENBSD_VERSION})
+    -r --release OPENBSD_VERSION
+      Specify the release (default: ${OPENBSD_VERSION})
 
-  --host_name HOST_NAME
-    Hostname of the VM (default: ${HOST_NAME})
+    --host_name HOST_NAME
+      Hostname of the VM (default: ${HOST_NAME})
 
-  --http_server IP
-    IP of the HTTP mirror hosting the sets and disklabel file (default: ${HTTP_SERVER})
+    --http_server IP
+      IP of the HTTP mirror hosting the sets and disklabel file (default: ${HTTP_SERVER})
 
-  --sshkey <PUB KEY FILE PATH>
-    Path to a SSH public key file for the root user (default: ${SSH_KEY_VAL})
+    --sshkey <PUB KEY FILE PATH>
+      Path to a SSH public key file for the root user (default: ${SSH_KEY_VAL})
 
   --sets "<SET NAMES>"
     Specify the sets to be installed (default: ${SETS})
 
-  --timezone TIMEZONE
-    Specify the timezone of the final system (default: ${TIMEZONE})
+    --timezone TIMEZONE
+      Specify the timezone of the final system (default: ${TIMEZONE})
 
-  --allow-root-ssh [yes|no|prohibit-password]
-    Allow root ssh login (default: ${ALLOW_ROOT_SSH})
+    --allow_root_ssh [yes|no|prohibit-password]
+      Allow root ssh login (default: ${ALLOW_ROOT_SSH})
 
 AUTHOR
   Hyacinthe Cartiaux <Hyacinthe.Cartiaux@gmail.com>

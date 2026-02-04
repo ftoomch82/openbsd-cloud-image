@@ -1,4 +1,5 @@
 .project
+*.swp
 mirror
 tftp
 images

@@ -50,7 +50,7 @@ therest: $(mypubdir)$(myqcowname) $(mypubdir)$(myqcowname).asc
 clean:
 	-$(RM) images/$(myqcowname) images/$(myqcowname)_compressed
 
-purge:
+purge: clean
 	-$(RM) --recursive mirror tftp
 
 purge_bad_release:

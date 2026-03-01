@@ -46,6 +46,10 @@ if ! pkg_info dmidecode > /dev/null 2>&1 ; then
    sed -i '/dmidecode/d' tools/build-on-openbsd
 fi
 
+# Fix: update_etc_hosts requires hosts.openbsd.tmpl which is absent on OpenBSD
+# causing a permanent status:failed at every boot
+sed -i 's/^  - update_etc_hosts/  # - update_etc_hosts/' config/cloud.cfg.tmpl
+
 ###########
 # Start the install script
 ###########

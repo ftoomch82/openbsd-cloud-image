@@ -39,7 +39,7 @@ jobs:
         runs-on: ubuntu-latest
         steps:
         - name: Check out the repository to the runner
-          uses: actions/checkout@v4
+          uses: actions/checkout@v6
         - name: Install dependencies
           run: sudo apt update ; sudo apt install -y signify-openbsd signify-openbsd-keys qemu-system
         - name: Build !
@@ -48,11 +48,11 @@ jobs:
         - name: Generate the checksum file
           run: |
             sha256sum images/${{inputs.filename}} > images/${{inputs.filename}}.sha256
-        - uses: actions/upload-artifact@v4
+        - uses: actions/upload-artifact@v7
           with:
               name: ${{inputs.filename}}
               path: images/${{inputs.filename}}
-        - uses: actions/upload-artifact@v4
+        - uses: actions/upload-artifact@v7
           with:
               name: ${{inputs.filename}}.sha256
               path: images/${{inputs.filename}}.sha256

@@ -5,7 +5,7 @@ on:
     inputs:
       release:
         description: 'OpenBSD release'
-        default: '7.8'
+        default: '7.9'
         required: true
         type: string
       filename:

@@ -34,6 +34,7 @@ images/$(myqcowname):
 	  --timezone UTC
 
 $(mypubdir)$(myqcowname): images/$(myqcowname)
+	-mkdir --parents $(@D)
 	cp -v "$<" "$@"
 
 $(mypubdir)$(myqcowname).asc: $(mypubdir)$(myqcowname)

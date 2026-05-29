@@ -1,6 +1,6 @@
 #!/usr/bin/env -S bash --posix
 ################################################################################
-# Description : see the print_help function or launch 'build_openbsd_qcow2 --help'
+# Description : build a qcow2 cloud image of OpenBSD
 #
 # Based on Stefan Kreutz and Gonéri Le Bouder works:
 # * https://www.skreutz.com/posts/autoinstall-openbsd-on-qemu/
@@ -173,6 +173,7 @@ function launch_install {
 # print help
 ##
 print_help() {
+    COMMAND=$(basename "$0")
     less <<EOF
 NAME
   $COMMAND
@@ -182,7 +183,7 @@ SYNOPSIS
 
 
 DESCRIPTION
-  $COMMAND build a cloud image of OpenBSD
+  $COMMAND builds a cloud image of OpenBSD
 
 OPTIONS
   -h --help

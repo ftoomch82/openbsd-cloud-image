@@ -3,3 +3,4 @@
 mirror
 tftp
 images
+GNUmakefile.config.local

@@ -120,7 +120,7 @@ function build_mirror {
     exec_cmd sed -i "s!\(HTTP.Server.=.\).*\$!\1${HTTP_SERVER}!"                "${PATH_MIRROR}/install.conf"
     exec_cmd sed -i "s!\(Allow.root.ssh.login.=.\).*\$!\1${ALLOW_ROOT_SSH}!"    "${PATH_MIRROR}/install.conf"
     [[ -n "$SSH_KEY" ]] && SSH_KEY_VAL=$(cat "$SSH_KEY")
-    exec_cmd echo "Set name\(s\) = ${SETS}"                          | tail -n 1 | exec_cmd tee -a "${PATH_MIRROR}/install.conf"
+    exec_cmd echo "Set name\(s\) = \"${SETS}\""                      | tail -n 1 | exec_cmd tee -a "${PATH_MIRROR}/install.conf"
     exec_cmd echo "Public ssh key for root account = ${SSH_KEY_VAL}" | tail -n 1 | exec_cmd tee -a "${PATH_MIRROR}/install.conf"
     exec_cmd echo "What timezone are you in = ${TIMEZONE}"           | tail -n 1 | exec_cmd tee -a "${PATH_MIRROR}/install.conf"
     if [[ -n "$EFI" ]]; then

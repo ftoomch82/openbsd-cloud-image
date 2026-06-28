@@ -1,7 +1,7 @@
 /           500M
-swap        80M
+swap        200M
 /tmp        700M-4G 10%
-/usr        1.5G-3G 22%
-/var        80M-4G  13%
-/usr/local  2G-4G   50%
-/home       700M-*  5%
+/usr        2G-3G   30%
+/var        80M-4G  10%
+/usr/local  6G-9G   30%
+/home       700M-*  20%

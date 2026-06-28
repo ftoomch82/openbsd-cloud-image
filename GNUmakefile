@@ -74,6 +74,31 @@ myrepoascs := $(addprefix $(mysoftwarerepo),$(relascs))
 
 myscpstamps := $(addprefix .sent/,$(relimages))
 
+# Image args
+#
+# Lookup order used by image_args:
+#
+#   1. image_args_<version>_<arch>_<flavour>
+#   2. image_args_<version>_<flavour>
+#   3. image_args_<arch>_<flavour>
+#   4. image_args_<flavour>
+#   5. image_args_default
+#
+# Examples:
+#
+#   image_args_7.9_amd64_efi
+#   image_args_7.9_efi
+#   image_args_amd64_efi
+#   image_args_efi
+#
+# Call with $(call image_args,$(version),$(arch),$(flavour))
+image_args = $(strip $(or \
+  $(image_args_$(1)_$(2)_$(3)), \
+  $(image_args_$(1)_$(3)), \
+  $(image_args_$(2)_$(3)), \
+  $(image_args_$(3)), \
+  $(image_args_default)))
+
 # ----------------------------------------------------------------------
 # Public targets
 # ----------------------------------------------------------------------
@@ -164,9 +189,7 @@ $(myimagedir)OpenBSD/$(1)/$(2)/openbsd-$(3)-$(mydate).qcow2:
 	  --disklabel custom/disklabel-$(3) \
 	  --image-file $$(@:$(myimagedir)%=%) \
 	  --reuse-proxy \
-	  $$(image_args_$(3)) \
-	  --size 10 \
-	  --timezone UTC
+	  $$(call image_args,$(1),$(2),$(3))
 else
 $(myimagedir)OpenBSD/$(1)/$(2)/openbsd-$(3)-$(mydate).qcow2:
 	@echo 'Did you forget to enable your proxy to make "$$@?" Exiting.'
@@ -230,3 +253,5 @@ $(foreach version,$(myversions), \
 clean:
 	-$(RM) --recursive $(myimagedir)OpenBSD .sent
 
+purge: clean
+	-$(RM) --recursive mirror/*
